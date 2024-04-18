@@ -119,8 +119,8 @@ class HexLattice:
         x_max = np.max(all_x)
         z_min = np.min(all_z)
         z_max = np.max(all_z)
-        ax.set_ylim((z_min-0.05*abs(z_min), z_max+0.05*abs(z_max)))
-        ax.set_xlim((x_min-0.05*abs(x_min), x_max+0.1*abs(x_max)))
+        ax.set_ylim((z_min-pc.figure_expand*abs(z_min), z_max+pc.figure_expand*abs(z_max)))
+        ax.set_xlim((x_min-pc.figure_expand*abs(x_min), x_max+pc.figure_expand*abs(x_max)))
         ax.set_aspect('equal')
         ax.axis('off')
         
@@ -196,8 +196,8 @@ class HexLattice:
         x_max = np.max(all_x)
         z_min = np.min(all_z)
         z_max = np.max(all_z)
-        ax.set_ylim((z_min-0.2*abs(z_min), z_max+0.2*abs(z_max)))
-        ax.set_xlim((x_min-0.2*abs(x_min), x_max+0.2*abs(x_max)))
+        ax.set_ylim((z_min-pc.figure_expand*abs(z_min), z_max+pc.figure_expand*abs(z_max)))
+        ax.set_xlim((x_min-pc.figure_expand*abs(x_min), x_max+pc.figure_expand*abs(x_max)))
         ax.set_aspect('equal')
         ax.axis('off')
         

@@ -52,6 +52,7 @@ class PlotConfig:
     # figure
     figure_dpi      : float         = 300
     figure_size     : tuple[float]  = (15, 15)
+    figure_expand   : float         = 0.1
     
     # axes
     axes_titlesize  : float         = 25

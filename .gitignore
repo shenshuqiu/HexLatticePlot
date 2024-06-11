@@ -1,5 +1,6 @@
 .pytest_cache
 .venv
 .vscode
+.history
 __pycache__/
 archieved

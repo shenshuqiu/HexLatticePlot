@@ -180,7 +180,7 @@ class HexLattice:
         
         return ax                
     
-    def plot_circle(self, pc: PlotConfig, ax: Axes=None) -> Axes:
+    def plot_circle(self, pc: PlotConfig, ax: Axes=None, plot_type: Literal['value', 'text']='value') -> Axes:
         # set plot config
         pc.set_plot_config()
         
@@ -200,14 +200,16 @@ class HexLattice:
         ax.set_aspect('equal')
         ax.axis('off')
         
-        plot_by_value = all(hex_cell.text is None for hex_cell in self.HexCells)
         # Create Polygon by HexCells
         for i, hex_cell in enumerate(self.HexCells):
-            if plot_by_value:
+            if plot_type == 'value':
+                # calculate hex color by value
+                hex_face_color = pc.color_map(self.normed_value_list[i])
+                
                 # Create Polygon
                 hex_patch = Circle(
                     hex_cell.real_cartesian.as_tuple(),
-                    radius      = 0.8 * hex_cell.radius,
+                    radius      = hex_cell.radius * np.sqrt(3) / 2,
                     facecolor   = hex_face_color,
                     edgecolor   = pc.hex_edge_color,
                 )
@@ -225,11 +227,11 @@ class HexLattice:
                     fontsize = pc.text_size,
                     color = pc.text_color_func(hex_face_color)
                 )
-            else:
+            elif plot_type == 'text':
                                 # Create Polygon
                 hex_patch = Circle(
                     hex_cell.real_cartesian.as_tuple(),
-                    radius      = 0.8 * hex_cell.radius,
+                    radius      = hex_cell.radius * np.sqrt(3) / 2,
                     facecolor   = pc.hex_face_color,
                     edgecolor   = pc.hex_edge_color,
                 )
@@ -247,8 +249,9 @@ class HexLattice:
                     fontsize = pc.text_size,
                     color = pc.text_color
                 )
-                # calculate hex color by value
-                hex_face_color = pc.color_map(self.normed_value_list[i])
+
+            else:
+                raise TypeError('Wrong Plot Type!')
                 
 
                 

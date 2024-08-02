@@ -50,8 +50,8 @@ class PlotConfig:
     hex_edge_color  : str           = 'black'
 
     # figure
-    figure_dpi      : float         = 300
-    figure_size     : tuple[float]  = (15, 15)
+    figure_dpi      : float         = 400
+    figure_size     : tuple[float]  = (12, 12)
     figure_expand   : float         = 0.1
     
     # axes

@@ -141,7 +141,7 @@ class AxialCoordinate:
         neighbour_list = list()
         for direction in DIRACTIONS:
             coord_copy = deepcopy(self)
-            neighbour_list.append(coord_copy.move(direction, 1.0))
+            neighbour_list.append(coord_copy.move(direction, 1))
         return neighbour_list
     
     def as_tuple(self) -> tuple[int]:

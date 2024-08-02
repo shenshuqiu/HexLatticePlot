@@ -46,7 +46,7 @@ class PlotConfig:
     
     # hex
     plot_style      : str           = 'bmh'
-    hex_face_color  : str           = high_contrast_colors[-1]
+    hex_face_color  : str           = high_contrast_colors[0]
     hex_edge_color  : str           = 'black'
 
     # figure

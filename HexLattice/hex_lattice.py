@@ -1,17 +1,17 @@
-from pathlib import Path
+from typing import Optional, Literal, Callable
+from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
-import matplotlib as mpl
 from matplotlib.axes._axes import Axes
 from matplotlib.patches import Polygon, Circle
-from matplotlib.colors import LinearSegmentedColormap, Normalize
+from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable
 import numpy as np
 
 from HexLattice.coordinates import AbstractCoordinate
 
-from .coordinates import *
-from .plot_config import *
+from .coordinates import Coordinate, ValidDirections, CartesianCoordinate
+from .plot_config import PlotConfig
 
 @dataclass
 class HexCell(Coordinate):
@@ -103,159 +103,70 @@ class HexLattice:
         for cell in self.HexCells:
             cell.ObjectRelatedCoordinate = assigner(cell)
             
-    def plot_hex(self, pc: PlotConfig, ax: Axes=None) -> tuple[Axes, Optional[ScalarMappable]]:
-        # set plot config
-        pc.set_plot_config()
-        
-        # plot all Hex on ax
-        if ax is None:
-            ax = plt.subplot()
-        
-        # set ax lim through HexCells
-        all_x = [[vertex[0] for vertex in hex_cell.vertexes_pointy] for hex_cell in self.HexCells]
-        all_z = [[vertex[1] for vertex in hex_cell.vertexes_pointy] for hex_cell in self.HexCells]
-        x_min = np.min(all_x)
-        x_max = np.max(all_x)
-        z_min = np.min(all_z)
-        z_max = np.max(all_z)
-        ax.set_ylim((z_min-pc.figure_expand*abs(z_min), z_max+pc.figure_expand*abs(z_max)))
-        ax.set_xlim((x_min-pc.figure_expand*abs(x_min), x_max+pc.figure_expand*abs(x_max)))
-        ax.set_aspect('equal')
-        ax.axis('off')
-        
-        
-        # Create Polygon by HexCells
+    def _plot_cells(self, ax: Axes, pc: PlotConfig, shape_func: Callable, text_mode: Literal['value', 'text']) -> Axes:
         for i, hex_cell in enumerate(self.HexCells):
-            if hex_cell.text is not None:
-                # Create Polygon
-                hex_patch = Polygon(
-                    hex_cell.vertexes_pointy,
-                    closed      = True,
-                    facecolor   = pc.hex_face_color,
-                    edgecolor   = pc.hex_edge_color,
-                )
-                ax.add_patch(hex_patch)
-                
-                # add text
-                centre_x = hex_cell.real_cartesian.x
-                centre_y = hex_cell.real_cartesian.y
-                ax.text(
-                    centre_x,
-                    centre_y,
-                    hex_cell.text,
-                    horizontalalignment='center',
-                    verticalalignment='center',
-                    fontsize = pc.text_size,
-                    color = pc.text_color
-                )
-                
-            else:
-                # calculate hex color by value
-                hex_face_color = pc.color_map(self.normed_value_list[i])
-                
-                # Create Polygon
-                hex_patch = Polygon(
-                    hex_cell.vertexes_pointy,
-                    closed      = True,
-                    facecolor   = hex_face_color,
-                    edgecolor   = pc.hex_edge_color,
-                )
-                ax.add_patch(hex_patch)
-                
-                # add text
-                centre_x = hex_cell.real_cartesian.x
-                centre_y = hex_cell.real_cartesian.y
-                ax.text(
-                    centre_x,
-                    centre_y,
-                    round(hex_cell.value, 2),
-                    horizontalalignment='center',
-                    verticalalignment='center',
-                    fontsize = pc.text_size,
-                    color = pc.text_color_func(hex_face_color)
-                )
-                
-        
-        ax.set_title(pc.image_name)
-        
-        return ax                
-    
-    def plot_circle(self, pc: PlotConfig, ax: Axes=None, plot_type: Literal['value', 'text']='value') -> Axes:
-        # set plot config
-        pc.set_plot_config()
-        
-        # plot all Hex on ax
-        if ax is None:
-            ax = plt.subplot()
-        
-        # set ax lim through HexCells
-        all_x = [[vertex[0] for vertex in hex_cell.vertexes_pointy] for hex_cell in self.HexCells]
-        all_z = [[vertex[1] for vertex in hex_cell.vertexes_pointy] for hex_cell in self.HexCells]
-        x_min = np.min(all_x)
-        x_max = np.max(all_x)
-        z_min = np.min(all_z)
-        z_max = np.max(all_z)
-        ax.set_ylim((z_min-pc.figure_expand*abs(z_min), z_max+pc.figure_expand*abs(z_max)))
-        ax.set_xlim((x_min-pc.figure_expand*abs(x_min), x_max+pc.figure_expand*abs(x_max)))
-        ax.set_aspect('equal')
-        ax.axis('off')
-        
-        # Create Polygon by HexCells
-        for i, hex_cell in enumerate(self.HexCells):
-            if plot_type == 'value':
-                # calculate hex color by value
-                hex_face_color = pc.color_map(self.normed_value_list[i])
-                
-                # Create Polygon
-                hex_patch = Circle(
-                    hex_cell.real_cartesian.as_tuple(),
-                    radius      = hex_cell.radius * np.sqrt(3) / 2,
-                    facecolor   = hex_face_color,
-                    edgecolor   = pc.hex_edge_color,
-                )
-                ax.add_patch(hex_patch)
-                
-                # add text
-                centre_x = hex_cell.real_cartesian.x
-                centre_y = hex_cell.real_cartesian.y
-                ax.text(
-                    centre_x,
-                    centre_y,
-                    round(hex_cell.value, 2),
-                    horizontalalignment='center',
-                    verticalalignment='center',
-                    fontsize = pc.text_size,
-                    color = pc.text_color_func(hex_face_color)
-                )
-            elif plot_type == 'text':
-                                # Create Polygon
-                hex_patch = Circle(
-                    hex_cell.real_cartesian.as_tuple(),
-                    radius      = hex_cell.radius * np.sqrt(3) / 2,
-                    facecolor   = pc.hex_face_color,
-                    edgecolor   = pc.hex_edge_color,
-                )
-                ax.add_patch(hex_patch)
-                
-                # add text
-                centre_x = hex_cell.real_cartesian.x
-                centre_y = hex_cell.real_cartesian.y
-                ax.text(
-                    centre_x,
-                    centre_y,
-                    hex_cell.text,
-                    horizontalalignment='center',
-                    verticalalignment='center',
-                    fontsize = pc.text_size,
-                    color = pc.text_color
-                )
-
+            if text_mode == 'value':
+                color = pc.color_map(self.normed_value_list[i])
+                label = round(hex_cell.value, 2)
+                text_color = pc.text_color_func(color)
+            elif text_mode == 'text':
+                color = pc.hex_face_color
+                label = hex_cell.text
+                text_color = pc.text_color
             else:
                 raise TypeError('Wrong Plot Type!')
-                
 
-                
+            patch = shape_func(hex_cell, color, pc.hex_edge_color)
+            ax.add_patch(patch)
+            ax.text(
+                hex_cell.real_cartesian.x,
+                hex_cell.real_cartesian.y,
+                label,
+                ha='center',
+                va='center',
+                fontsize=pc.text_size,
+                color=text_color
+            )
         ax.set_title(pc.image_name)
-        
         return ax
+
+    def _setup_ax(self, pc: PlotConfig, ax: Optional[Axes]) -> Axes:
+        pc.set_plot_config()
+        if ax is None:
+            ax = plt.subplot()
+        all_x = [[v[0] for v in cell.vertexes_pointy] for cell in self.HexCells]
+        all_z = [[v[1] for v in cell.vertexes_pointy] for cell in self.HexCells]
+        ax.set_xlim((np.min(all_x) - pc.figure_expand, np.max(all_x) + pc.figure_expand))
+        ax.set_ylim((np.min(all_z) - pc.figure_expand, np.max(all_z) + pc.figure_expand))
+        ax.set_aspect('equal')
+        ax.axis('off')
+        return ax
+
+    def plot_hex(self, pc: PlotConfig, ax: Axes = None) -> Axes:
+        ax = self._setup_ax(pc, ax)
+
+        def polygon_func(cell: HexCell, facecolor, edgecolor):
+            return Polygon(
+                cell.vertexes_pointy,
+                closed=True,
+                facecolor=facecolor,
+                edgecolor=edgecolor
+            )
+
+        text_mode = 'text' if all(cell.text is not None for cell in self.HexCells) else 'value'
+        return self._plot_cells(ax, pc, polygon_func, text_mode)
+
+    def plot_circle(self, pc: PlotConfig, ax: Axes = None, plot_type: Literal['value', 'text'] = 'value') -> Axes:
+        ax = self._setup_ax(pc, ax)
+
+        def circle_func(cell: HexCell, facecolor, edgecolor):
+            return Circle(
+                cell.real_cartesian.as_tuple(),
+                radius=cell.radius * np.sqrt(3) / 2,
+                facecolor=facecolor,
+                edgecolor=edgecolor
+            )
+
+        return self._plot_cells(ax, pc, circle_func, plot_type)
+
         

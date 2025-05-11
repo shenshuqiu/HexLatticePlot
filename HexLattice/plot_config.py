@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional, Callable
+from typing import Literal, Callable
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl

@@ -8,9 +8,7 @@ from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable
 import numpy as np
 
-from HexLattice.coordinates import AbstractCoordinate
-
-from .coordinates import Coordinate, ValidDirections, CartesianCoordinate
+from .coordinates import AbstractCoordinate, Coordinate, ValidDirections, CartesianCoordinate
 from .plot_config import PlotConfig
 
 @dataclass
@@ -22,7 +20,7 @@ class HexCell(Coordinate):
             radius: float           = 1 / np.sqrt(3),
             text:   Optional[str]   = None,
             value:  Optional[float] = None,
-            real_cartesian: Optional[float] = None
+            real_cartesian: Optional[CartesianCoordinate] = None
         ) -> None:
         super().__init__(centre_coord)
         self.centre         = Coordinate(centre_coord)
@@ -36,7 +34,7 @@ class HexCell(Coordinate):
         return HexCell(Coordinate(neighbour_axial_coord))
     
     @property
-    def vertexes_pointy(self) -> list[tuple]:
+    def vertexes_pointy(self) -> list[tuple[float, float]]:
         res_list = list()
         for angle in range(30, 360, 60):
             angle_rad = angle / 180 * np.pi
@@ -52,7 +50,7 @@ class HexCell(Coordinate):
         return HexCell(self.centre, factor*self.radius, self.text, self.value, factor*self.real_cartesian)
     
     # valued in HexLattice Object
-    ObjectRelatedCoordinate: tuple = None
+    ObjectRelatedCoordinate: Optional[tuple] = None
     
 @dataclass
 class HexLattice:
@@ -73,7 +71,7 @@ class HexLattice:
         self.HexCells = real_hex_cells
     
     @property
-    def value_list(self) -> np.array:
+    def value_list(self) -> np.ndarray:
         hex_cell_value_list = [hex_cell.value for hex_cell in self.HexCells]
         if all(hex_cell_value is None for hex_cell_value in hex_cell_value_list):
             return np.array([0 for _ in hex_cell_value_list])
@@ -81,7 +79,7 @@ class HexLattice:
             return np.array([0 if hex_cell_value is None else hex_cell_value for hex_cell_value in hex_cell_value_list])
     
     @property
-    def normed_value_list(self) -> np.array:
+    def normed_value_list(self) -> np.ndarray:
         value_list = self.value_list
         value_min  = np.min(value_list)
         value_max  = np.max(value_list)
@@ -107,11 +105,12 @@ class HexLattice:
         for i, hex_cell in enumerate(self.HexCells):
             if text_mode == 'value':
                 color = pc.color_map(self.normed_value_list[i])
-                label = round(hex_cell.value, 2)
+                value = 0.0 if hex_cell.value is None else hex_cell.value
+                label = f"{round(value, 2)}"
                 text_color = pc.text_color_func(color)
             elif text_mode == 'text':
                 color = pc.hex_face_color
-                label = hex_cell.text
+                label = "" if hex_cell.text is None else hex_cell.text
                 text_color = pc.text_color
             else:
                 raise TypeError('Wrong Plot Type!')
@@ -142,7 +141,7 @@ class HexLattice:
         ax.axis('off')
         return ax
 
-    def plot_hex(self, pc: PlotConfig, ax: Axes = None) -> Axes:
+    def plot_hex(self, pc: PlotConfig, ax: Optional[Axes] = None) -> Axes:
         ax = self._setup_ax(pc, ax)
 
         def polygon_func(cell: HexCell, facecolor, edgecolor):
@@ -156,7 +155,7 @@ class HexLattice:
         text_mode = 'text' if all(cell.text is not None for cell in self.HexCells) else 'value'
         return self._plot_cells(ax, pc, polygon_func, text_mode)
 
-    def plot_circle(self, pc: PlotConfig, ax: Axes = None, plot_type: Literal['value', 'text'] = 'value') -> Axes:
+    def plot_circle(self, pc: PlotConfig, ax: Optional[Axes] = None, plot_type: Literal['value', 'text'] = 'value') -> Axes:
         ax = self._setup_ax(pc, ax)
 
         def circle_func(cell: HexCell, facecolor, edgecolor):

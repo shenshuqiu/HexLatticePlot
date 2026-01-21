@@ -1,13 +1,20 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from dataclasses import dataclass, field, fields
-from typing import Literal, Sequence, TypedDict, Optional, Union, Callable
+from dataclasses import dataclass, field, fields, is_dataclass
+from typing import Literal, Sequence, Optional, Union, cast
 
 import numpy as np
 
 # The Six valid Directions of Hexagons
 ValidDirections = Literal['right', 'bottom-right', 'bottom-left', 'left', 'top-left', 'top-right']
-DIRACTIONS = ['right', 'bottom-right', 'bottom-left', 'left', 'top-left', 'top-right']
+DIRACTIONS: tuple[ValidDirections, ...] = (
+    'right',
+    'bottom-right',
+    'bottom-left',
+    'left',
+    'top-left',
+    'top-right',
+)
 ValidCoordinateType = Literal['axial', 'ring', 'cube', 'double_width', 'cartesian']
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -32,7 +39,9 @@ class AxialCoordinate:
     z: int = 0
     name: str = field(default='axial', init=False, repr=False)
     
-    def coord_is_valid(coord: Sequence[int]) -> bool:
+    @staticmethod
+    @staticmethod
+    def coord_is_valid(coord: Sequence[Union[int, float]]) -> bool:
         return True
     
     def __init__(self, *args) -> None:
@@ -71,6 +80,8 @@ class AxialCoordinate:
         Returns:
             AxialCoordinate: The modified axial coordinate after moving in the given direction.
         """
+        if direction not in DIRACTIONS:
+            raise KeyError(f'The direction \'{direction}\' is invalid. The valid directions are {DIRACTIONS}')
         if not isinstance(distance, int):
             raise TypeError(f'The distance \'{distance}\' is invalid. The distance must be int.')
         
@@ -144,7 +155,7 @@ class AxialCoordinate:
             neighbour_list.append(coord_copy.move(direction, 1))
         return neighbour_list
     
-    def as_tuple(self) -> tuple[int]:
+    def as_tuple(self) -> tuple[int, int]:
         """
         Returns the coordinates as a tuple.
         """
@@ -159,8 +170,10 @@ class AxialCoordinate:
     def __lt__(self, other: 'AxialCoordinate') -> bool:
         return self.x < other.x if self.x != other.x else self.z < other.z
     
-    def __eq__(self, other: 'AxialCoordinate') -> bool:
-        return (self.x == other.x) & (self.z == other.z)
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, AxialCoordinate):
+            return False
+        return (self.x == other.x) and (self.z == other.z)
     
     def convert_to_axial(self) -> 'AxialCoordinate':
         return self
@@ -178,8 +191,9 @@ class AbstractCoordinate(ABC):
     An abstract base class for a coordinate system that is independent of specific instances. This class requires defining the mapping relationship between this coordinate system and the axial coordinates.
     """
     
+    @staticmethod
     @abstractmethod
-    def coord_is_valid(coord: Sequence[int]) -> bool:
+    def coord_is_valid(coord: Sequence[Union[int, float]]) -> bool:
         """
         Validate the initialization coordinates.
 
@@ -219,6 +233,7 @@ class AbstractCoordinate(ABC):
         """
         pass
     
+    @staticmethod
     @abstractmethod
     def converted_from_axial(axial_coord: AxialCoordinate) -> 'AbstractCoordinate':
         """
@@ -246,17 +261,21 @@ class AbstractCoordinate(ABC):
         """
         return self.convert_to_axial() < other.convert_to_axial()
     
-    def __eq__(self, other: 'AbstractCoordinate') -> bool:
+    def __eq__(self, other: object) -> bool:
         """
         Equality comparison for coordinates based on axial representation.
         """
+        if not isinstance(other, AbstractCoordinate):
+            return False
         return self.convert_to_axial() == other.convert_to_axial()
     
-    def as_tuple(self):
+    def as_tuple(self) -> tuple:
         """
         Returns the coordinates as a tuple.
         """
-        return tuple(getattr(self, field.name) for field in fields(self) if field.repr)
+        if is_dataclass(self):
+            return tuple(getattr(self, field.name) for field in fields(self) if field.repr)
+        return tuple(vars(self).values())
     
     def move(self, direction: ValidDirections, distance: int) -> 'AbstractCoordinate':
         """
@@ -269,14 +288,6 @@ class AbstractCoordinate(ABC):
         for attr_name, attr_value in vars(new_recoords).items():
             setattr(self, attr_name, attr_value)
         return self
-    
-    def get_new_by_moving(self, direction: ValidDirections, distance: int) -> 'AbstractCoordinate':
-        """
-        Get a new coordinate by moving
-        """
-        new_coord = deepcopy(self)
-        new_coord.move(direction, distance)
-        return new_coord
     
     def get_new_by_moving(self, direction: ValidDirections, distance: int) -> 'AbstractCoordinate':
         """
@@ -355,7 +366,8 @@ class RingCoordinate(AbstractCoordinate):
     k: int = 0
     name: str = field(default='ring', init=False, repr=False)
     
-    def coord_is_valid(coord: Sequence[int]) -> bool:
+    @staticmethod
+    def coord_is_valid(coord: Sequence[Union[int, float]]) -> bool:
         return all(x >= 0 for x in coord)
     
     def convert_to_axial(self) -> AxialCoordinate:
@@ -449,22 +461,30 @@ class CubeCoordinate(AbstractCoordinate):
     z: int = 0
     name: str = field(default='cube', init=False, repr=False)
     
-    def coord_is_valid(coord: Sequence[int]) -> bool:
-        return super().coord_is_valid()
+    @staticmethod
+    def coord_is_valid(coord: Sequence[Union[int, float]]) -> bool:
+        return len(coord) == 3 and sum(coord) == 0
     
     def __init__(self, *args: Union[int, Sequence[int]]) -> None:
         # input Sequence[int]
-        if len(args) == 1 and isinstance(args[0], (tuple, list)) and len(args[0]) == 3 and sum(args[0]) == 0:
-            self.x, self.y, self.z = args[0]
+        if len(args) == 1 and isinstance(args[0], (tuple, list)) and len(args[0]) == 3:
+            x, y, z = cast(tuple[int, int, int], args[0])
+            if x + y + z != 0:
+                raise TypeError(f'Invalid arguments {args}: Must be 3 int whose sum is 0.')
+            self.x, self.y, self.z = x, y, z
             
         # input x, z
-        elif len(args) == 2 and all(isinstance(arg, int) for arg in args): 
-            self.x, self.y = args
+        elif len(args) == 2 and all(isinstance(arg, int) for arg in args):
+            x, y = cast(tuple[int, int], args)
+            self.x, self.y = x, y
             self.z = - self.x - self.y
             
         # input x, y, z
-        elif len(args) == 3 and all(isinstance(arg, int) for arg in args) and sum(args) == 0:
-            self.x, self.y, self.z = args
+        elif len(args) == 3 and all(isinstance(arg, int) for arg in args):
+            x, y, z = cast(tuple[int, int, int], args)
+            if x + y + z != 0:
+                raise TypeError(f'Invalid arguments {args}: Must be 3 int whose sum is 0.')
+            self.x, self.y, self.z = x, y, z
             
         # Raise TypeError
         else:
@@ -503,8 +523,9 @@ class DoubleWidthCoordinate(AbstractCoordinate):
     z: int = 0
     name: str = field(default='double_width', init=False, repr=False)
     
-    def coord_is_valid(coord: Sequence[int]) -> bool:
-        return super().coord_is_valid()
+    @staticmethod
+    def coord_is_valid(coord: Sequence[Union[int, float]]) -> bool:
+        return len(coord) == 2 and all(isinstance(x, int) for x in coord)
     
     def convert_to_axial(self) -> AxialCoordinate:
         return AxialCoordinate(round((self.x-self.z)/2), self.z)
@@ -538,17 +559,19 @@ class CartesianCoordinate(AbstractCoordinate):
     tol: float  = field(default=1e-4, repr=False)
     name: str   = field(default='cartesian', init=False, repr=False)
     
-    def coord_is_valid(coord: Sequence[int]) -> bool:
-        return super().coord_is_valid()
+    @staticmethod
+    def coord_is_valid(coord: Sequence[Union[int, float]]) -> bool:
+        return len(coord) == 2
     
-    def __init__(self, *args: Union[float, Sequence[float]]) -> None:
+    def __init__(self, *args: Union[float, int, Sequence[Union[float, int]]]) -> None:
         # Input Sequence
-        if len(args) == 1 and isinstance(args[0], (tuple, list)) and len(args[0]) == 2 and all(isinstance(arg, float) for arg in args[0]):
-            self.x, self.y = args[0]
+        if len(args) == 1 and isinstance(args[0], (tuple, list)) and len(args[0]) == 2 and all(isinstance(arg, (float, int)) for arg in args[0]):
+            self.x, self.y = float(args[0][0]), float(args[0][1])
             
         # Input 2 floats           
-        elif len(args) == 2 and all(isinstance(arg, float) for arg in args): 
-            self.x, self.y = args
+        elif len(args) == 2 and all(isinstance(arg, (float, int)) for arg in args):
+            x, y = cast(tuple[Union[int, float], Union[int, float]], args)
+            self.x, self.y = float(x), float(y)
             
         # Raise TypeError
         else:
@@ -561,18 +584,18 @@ class CartesianCoordinate(AbstractCoordinate):
         Returns:
             The NEAREST AxialCoordinate
         """
-        x = round(self.x + self.z / np.sqrt(3))
-        z = round(-2 * self.z / np.sqrt(3))
-        return AxialCoordinate(x,z)
+        x = round(self.x + self.y / np.sqrt(3))
+        z = round(-2 * self.y / np.sqrt(3))
+        return AxialCoordinate(x, z)
         
     @staticmethod
     def converted_from_axial(axial_coord: AxialCoordinate) -> 'CartesianCoordinate':
         x = axial_coord.x + axial_coord.z / 2
-        z = -np.sqrt(3) * axial_coord.z / 2
-        return CartesianCoordinate(x, z)
+        y = -np.sqrt(3) * axial_coord.z / 2
+        return CartesianCoordinate(x, y)
     
-    def __rmul__(self, factor: float) -> 'CartesianCoordinate':
-        return CartesianCoordinate(factor*self.x, factor*self.y)
+    def __rmul__(self, factor: Union[float, int]) -> 'CartesianCoordinate':
+        return CartesianCoordinate(factor * self.x, factor * self.y)
     
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -586,21 +609,21 @@ class CoordinateFactory:
     #    'axial': AxialCoordinate,
     #    ...
     #  }
-    coordinate_dict = dict()
+    coordinate_dict: dict[str, type[AbstractCoordinate] | type[AxialCoordinate]] = dict()
     for coord_class in AbstractCoordinate.__subclasses__():
         coordinate_dict[getattr(coord_class, 'name')] = coord_class
     coordinate_dict['axial'] = AxialCoordinate
     
     @staticmethod
-    def check_coord_type(coord_class: AbstractCoordinate) -> None:
-        if not isinstance(coord_class, AxialCoordinate)  and not any(isinstance(coord_class, c_class) for c_class in AbstractCoordinate.__subclasses__()):
-            raise ValueError(f'Invalid coordinary type \'{coord_class}\'.')
+    def check_coord_type(coord: AbstractCoordinate | AxialCoordinate) -> None:
+        if not isinstance(coord, AxialCoordinate) and not any(isinstance(coord, c_class) for c_class in AbstractCoordinate.__subclasses__()):
+            raise ValueError(f'Invalid coordinary type \'{coord}\'.')
 
     @staticmethod
-    def convert_all(coord_class: AbstractCoordinate) -> dict[ValidCoordinateType, AbstractCoordinate]:
-        CoordinateFactory.check_coord_type(coord_class)
+    def convert_all(coord: AbstractCoordinate | AxialCoordinate) -> dict[ValidCoordinateType, AbstractCoordinate | AxialCoordinate]:
+        CoordinateFactory.check_coord_type(coord)
         res_dict = dict()
-        axial_coord = coord_class.convert_to_axial()
+        axial_coord = coord.convert_to_axial()
         for c_type, c_class in CoordinateFactory.coordinate_dict.items():
             res_dict[c_type] = c_class.converted_from_axial(axial_coord)
         return res_dict
@@ -612,17 +635,17 @@ class Coordinate(AbstractCoordinate):
     """
     A data class storage all coordinate for a point
     """
-    ring:           Optional[RingCoordinate]          = field(default=None)
-    cube:           Optional[CubeCoordinate]          = field(default=None, repr=False)
-    axial:          Optional[AxialCoordinate]         = field(default=None)
-
-    double_width:  Optional[DoubleWidthCoordinate]    = field(default=None, repr=False)
-    cartesian:      Optional[CartesianCoordinate]     = field(default=None, repr=False)
+    ring:           RingCoordinate           = field(init=False)
+    cube:           CubeCoordinate           = field(init=False, repr=False)
+    axial:          AxialCoordinate          = field(init=False)
+    double_width:   DoubleWidthCoordinate    = field(init=False, repr=False)
+    cartesian:      CartesianCoordinate      = field(init=False, repr=False)
     
-    def coord_is_valid(coord: Sequence[int]) -> bool:
-        return super().coord_is_valid()
+    @staticmethod
+    def coord_is_valid(coord: Sequence[Union[int, float]]) -> bool:
+        return True
 
-    def __init__(self, coord_class: AbstractCoordinate) -> None:
+    def __init__(self, coord_class: AbstractCoordinate | AxialCoordinate) -> None:
         CoordinateFactory.check_coord_type(coord_class)
         coord_dict = CoordinateFactory.convert_all(coord_class)
         for coord_type, coord_object in coord_dict.items():

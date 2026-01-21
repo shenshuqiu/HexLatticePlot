@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Callable
+from typing import Literal, Callable, Sequence, Union
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -8,6 +8,7 @@ import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap
 
 AllowedImageType = Literal['jpg', 'png', 'eps', 'svg']
+ColorMapSpec = Union[str, mcolors.Colormap, Sequence[str]]
 
 # blue - orange
 high_contrast_colors = ['#90C9E6', '#269EBC', '#136784', '#023048', '#FFB702', '#FDA003', '#FB8502']
@@ -21,9 +22,8 @@ purple_gradient_colors = ['#FDF2EE', '#FDF2EE', '#FABFBE', '#F598B3', '#F0659F',
 # Color list
 COLOR_LIST = purple_gradient_colors
 
-def text_color_based_on_bgcolor(bg_color):
-    """return proper text color based on background color
-    """
+def text_color_based_on_bgcolor(bg_color: str) -> str:
+    """return proper text color based on background color"""
     color = mcolors.to_rgb(bg_color)
     luminance = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]  
     return 'white' if luminance < 0.5 else 'black'
@@ -40,9 +40,9 @@ class PlotConfig:
         return self.image_root_dir / f'{self.image_name}.{self.image_type}'
     
     # text
-    text_size       : float         = 20
-    text_color_func : Callable      = text_color_based_on_bgcolor
-    text_color      : str           = 'black'
+    text_size       : float                 = 20
+    text_color_func : Callable[[str], str]  = text_color_based_on_bgcolor
+    text_color      : str                   = 'black'
     
     # hex
     plot_style      : str           = 'bmh'
@@ -51,17 +51,32 @@ class PlotConfig:
 
     # figure
     figure_dpi      : float         = 400
-    figure_size     : tuple[float]  = (12, 12)
+    figure_size     : tuple[float, float] = (12, 12)
     figure_expand   : float         = 0.1
     
     # axes
     axes_titlesize  : float         = 25
     axes_titleweight: str           = 'normal'
     axes_titley     : float         = 0.95
+
+    # colormap
+    colormap        : ColorMapSpec | None = None
+    color_list      : Sequence[str] = field(default_factory=lambda: COLOR_LIST)
+    use_tex         : bool          = True
     
     @property
-    def color_map(self):
-        return LinearSegmentedColormap.from_list("my_cmap", COLOR_LIST)
+    def color_map(self) -> mcolors.Colormap:
+        cmap = self.colormap
+        if cmap is None:
+            return LinearSegmentedColormap.from_list("my_cmap", list(self.color_list))
+        if isinstance(cmap, mcolors.Colormap):
+            return cmap
+        if isinstance(cmap, str):
+            try:
+                return mpl.colormaps[cmap]
+            except KeyError as exc:
+                raise ValueError(f"Unknown colormap name: {cmap}") from exc
+        return LinearSegmentedColormap.from_list("my_cmap", list(cmap))
 
     def set_plot_config(self):
         # picture style
@@ -71,7 +86,7 @@ class PlotConfig:
         rc = {
             'font.family'                   : 'Times New Roman',
             'mathtext.fontset'              : 'stix',
-            'text.usetex'                   : True,
+            'text.usetex'                   : self.use_tex,
             'figure.dpi'                    : self.figure_dpi,
             'figure.figsize'                : self.figure_size,
             'axes.titlesize'                : self.axes_titlesize,
@@ -79,4 +94,3 @@ class PlotConfig:
             'axes.titley'                   : self.axes_titley
         }
         mpl.rcParams.update(rc)
-

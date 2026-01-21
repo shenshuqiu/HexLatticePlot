@@ -23,18 +23,24 @@ class HexCell(Coordinate):
             real_cartesian: Optional[CartesianCoordinate] = None
         ) -> None:
         super().__init__(centre_coord)
+        # 将输入的坐标系统一转为内部的 Coordinate，便于后续绘图使用
         self.centre         = Coordinate(centre_coord)
+        # 半径控制单元大小（默认使边长为 1）
         self.radius         = radius
+        # 文本/数值是可选信息，绘图时根据模式选择显示
         self.text           = text
         self.value          = value
+        # real_cartesian 用于缩放后的真实坐标，未传入则使用自身的 cartesian
         self.real_cartesian = self.cartesian if real_cartesian is None else real_cartesian
     
     def get_neighbour(self, direction: ValidDirections) -> 'HexCell':
+        # 邻居计算使用 axial 坐标系，逻辑更简洁
         neighbour_axial_coord = self.centre.axial.get_neighbour(direction)
         return HexCell(Coordinate(neighbour_axial_coord))
     
     @property
     def vertexes_pointy(self) -> list[tuple[float, float]]:
+        # pointy-top 六边形的顶点角度：30° 起每 60° 一个点
         res_list = list()
         for angle in range(30, 360, 60):
             angle_rad = angle / 180 * np.pi
@@ -47,6 +53,7 @@ class HexCell(Coordinate):
         """
         HexCell is multiplied when it it used for HexLattice.
         """
+        # 只缩放半径和真实坐标，不改变中心坐标/文本/数值
         return HexCell(self.centre, factor*self.radius, self.text, self.value, factor*self.real_cartesian)
     
     # valued in HexLattice Object
@@ -72,6 +79,7 @@ class HexLattice:
     
     @property
     def value_list(self) -> np.ndarray:
+        # 将 None 统一视为 0，便于后续归一化与颜色映射
         hex_cell_value_list = [hex_cell.value for hex_cell in self.HexCells]
         if all(hex_cell_value is None for hex_cell_value in hex_cell_value_list):
             return np.array([0 for _ in hex_cell_value_list])
@@ -80,12 +88,14 @@ class HexLattice:
     
     @property
     def normed_value_list(self) -> np.ndarray:
+        # 归一化到 [0, 1]，用于色图映射
         value_list = self.value_list
         value_min  = np.min(value_list)
         value_max  = np.max(value_list)
         return (value_list - value_min) / (value_max - value_min)
     
     def mappable(self, pc: PlotConfig) -> ScalarMappable:
+        # 提供与当前数据匹配的色图对象，便于外部绘制 colorbar
         norm = Normalize(vmin=np.min(self.value_list), vmax=np.max(self.value_list))
         cmap = pc.color_map
         return ScalarMappable(norm, cmap)
@@ -100,36 +110,9 @@ class HexLattice:
         """
         for cell in self.HexCells:
             cell.ObjectRelatedCoordinate = assigner(cell)
-            
-    def _plot_cells(self, ax: Axes, pc: PlotConfig, shape_func: Callable, text_mode: Literal['value', 'text']) -> Axes:
-        for i, hex_cell in enumerate(self.HexCells):
-            if text_mode == 'value':
-                color = pc.color_map(self.normed_value_list[i])
-                value = 0.0 if hex_cell.value is None else hex_cell.value
-                label = f"{round(value, 2)}"
-                text_color = pc.text_color_func(color)
-            elif text_mode == 'text':
-                color = pc.hex_face_color
-                label = "" if hex_cell.text is None else hex_cell.text
-                text_color = pc.text_color
-            else:
-                raise TypeError('Wrong Plot Type!')
-
-            patch = shape_func(hex_cell, color, pc.hex_edge_color)
-            ax.add_patch(patch)
-            ax.text(
-                hex_cell.real_cartesian.x,
-                hex_cell.real_cartesian.y,
-                label,
-                ha='center',
-                va='center',
-                fontsize=pc.text_size,
-                color=text_color
-            )
-        ax.set_title(pc.image_name)
-        return ax
 
     def _setup_ax(self, pc: PlotConfig, ax: Optional[Axes]) -> Axes:
+        # 统一设置画布与坐标系范围，避免每个绘图方法重复计算
         pc.set_plot_config()
         if ax is None:
             ax = plt.subplot()
@@ -139,6 +122,49 @@ class HexLattice:
         ax.set_ylim((np.min(all_z) - pc.figure_expand, np.max(all_z) + pc.figure_expand))
         ax.set_aspect('equal')
         ax.axis('off')
+        return ax
+
+    def _resolve_text_mode(self, requested: Optional[Literal['value', 'text']]) -> Literal['value', 'text']:
+        # 若未指定模式，默认优先显示 text；全部为空则回退到 value
+        if requested is None:
+            return 'text' if all(cell.text is not None for cell in self.HexCells) else 'value'
+        return requested
+
+    def _build_style(self, index: int, cell: HexCell, pc: PlotConfig, text_mode: Literal['value', 'text']) -> tuple:
+        # 样式计算与数据无关，集中在这里便于统一调整
+        if text_mode == 'value':
+            color = pc.color_map(self.normed_value_list[index])
+            value = 0.0 if cell.value is None else cell.value
+            label = f"{round(value, 2)}"
+            text_color = pc.text_color_func(color)
+        elif text_mode == 'text':
+            color = pc.hex_face_color
+            label = "" if cell.text is None else cell.text
+            text_color = pc.text_color
+        else:
+            raise TypeError('Wrong Plot Type!')
+        return color, label, text_color
+
+    def _draw_cell(self, ax: Axes, cell: HexCell, patch, label: str, text_color, pc: PlotConfig) -> None:
+        # 只做绘制，不关心颜色/文字如何计算
+        ax.add_patch(patch)
+        ax.text(
+            cell.real_cartesian.x,
+            cell.real_cartesian.y,
+            label,
+            ha='center',
+            va='center',
+            fontsize=pc.text_size,
+            color=text_color
+        )
+
+    def _render(self, ax: Axes, pc: PlotConfig, shape_func: Callable, text_mode: Literal['value', 'text']) -> Axes:
+        # 渲染流程统一封装：样式计算 -> patch 生成 -> 绘制
+        for i, cell in enumerate(self.HexCells):
+            facecolor, label, text_color = self._build_style(i, cell, pc, text_mode)
+            patch = shape_func(cell, facecolor, pc.hex_edge_color)
+            self._draw_cell(ax, cell, patch, label, text_color, pc)
+        ax.set_title(pc.image_name)
         return ax
 
     def plot_hex(self, pc: PlotConfig, ax: Optional[Axes] = None) -> Axes:
@@ -152,8 +178,8 @@ class HexLattice:
                 edgecolor=edgecolor
             )
 
-        text_mode = 'text' if all(cell.text is not None for cell in self.HexCells) else 'value'
-        return self._plot_cells(ax, pc, polygon_func, text_mode)
+        text_mode = self._resolve_text_mode(None)
+        return self._render(ax, pc, polygon_func, text_mode)
 
     def plot_circle(self, pc: PlotConfig, ax: Optional[Axes] = None, plot_type: Literal['value', 'text'] = 'value') -> Axes:
         ax = self._setup_ax(pc, ax)
@@ -166,6 +192,6 @@ class HexLattice:
                 edgecolor=edgecolor
             )
 
-        return self._plot_cells(ax, pc, circle_func, plot_type)
+        return self._render(ax, pc, circle_func, plot_type)
 
         

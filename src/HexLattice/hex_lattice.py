@@ -6,6 +6,7 @@ from matplotlib.axes._axes import Axes
 from matplotlib.patches import Polygon, Circle
 from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable
+from matplotlib.colorbar import Colorbar
 import numpy as np
 
 from .coordinates import AbstractCoordinate, Coordinate, ValidDirections, CartesianCoordinate
@@ -115,7 +116,13 @@ class HexLattice:
         # 统一设置画布与坐标系范围，避免每个绘图方法重复计算
         pc.set_plot_config()
         if ax is None:
-            ax = plt.subplot()
+            _, ax = plt.subplots(figsize=pc.figure_size, constrained_layout=pc.constrained_layout)
+        elif pc.constrained_layout:
+            fig = ax.get_figure(root=True)
+            if fig is not None:
+                setter = getattr(fig, "set_constrained_layout", None)
+                if callable(setter):
+                    setter(True)
         all_x = [[v[0] for v in cell.vertexes_pointy] for cell in self.HexCells]
         all_z = [[v[1] for v in cell.vertexes_pointy] for cell in self.HexCells]
         ax.set_xlim((np.min(all_x) - pc.figure_expand, np.max(all_x) + pc.figure_expand))
@@ -164,34 +171,79 @@ class HexLattice:
             facecolor, label, text_color = self._build_style(i, cell, pc, text_mode)
             patch = shape_func(cell, facecolor, pc.hex_edge_color)
             self._draw_cell(ax, cell, patch, label, text_color, pc)
-        ax.set_title(pc.image_name)
+        ax.set_title(pc.image_name, wrap=pc.title_wrap)
         return ax
 
-    def plot_hex(self, pc: PlotConfig, ax: Optional[Axes] = None) -> Axes:
+    def _shape_polygon(self, cell: HexCell, facecolor, edgecolor):
+        # pointy-top 六边形 patch
+        return Polygon(
+            cell.vertexes_pointy,
+            closed=True,
+            facecolor=facecolor,
+            edgecolor=edgecolor
+        )
+
+    def _shape_circle(self, cell: HexCell, facecolor, edgecolor):
+        # 圆形 patch（半径按六边形内切圆等效）
+        return Circle(
+            cell.real_cartesian.as_tuple(),
+            radius=cell.radius * np.sqrt(3) / 2,
+            facecolor=facecolor,
+            edgecolor=edgecolor
+        )
+
+    def plot(
+        self,
+        pc: PlotConfig,
+        shape: Literal['hex', 'circle'] = 'hex',
+        ax: Optional[Axes] = None,
+        text_mode: Optional[Literal['value', 'text']] = None,
+        colorbar: bool = False,
+        colorbar_label: Optional[str] = None,
+        colorbar_kwargs: Optional[dict] = None,
+        save: bool = False,
+        show: bool = False,
+        close: bool = False,
+    ) -> tuple[Axes, Optional[Colorbar]]:
+        # 对外统一绘图入口：创建画布 -> 渲染 -> 可选色标/保存/展示
         ax = self._setup_ax(pc, ax)
+        mode = self._resolve_text_mode(text_mode)
 
-        def polygon_func(cell: HexCell, facecolor, edgecolor):
-            return Polygon(
-                cell.vertexes_pointy,
-                closed=True,
-                facecolor=facecolor,
-                edgecolor=edgecolor
-            )
+        if shape == 'hex':
+            shape_func = self._shape_polygon
+        elif shape == 'circle':
+            shape_func = self._shape_circle
+        else:
+            raise ValueError(f"Unknown shape '{shape}', expected 'hex' or 'circle'.")
 
+        self._render(ax, pc, shape_func, mode)
+
+        fig = ax.get_figure(root=True)
+        if fig is None:
+            raise RuntimeError("Cannot resolve Figure from axes; ax.get_figure() returned None.")
+        cbar: Optional[Colorbar] = None
+        if colorbar:
+            cb_kwargs = {} if colorbar_kwargs is None else colorbar_kwargs
+            cbar = fig.colorbar(self.mappable(pc), ax=ax, **cb_kwargs)
+            if colorbar_label:
+                cbar.set_label(colorbar_label)
+
+        if save:
+            fig.savefig(pc.image_path)
+        if show:
+            plt.show()
+        if close:
+            plt.close(fig)
+
+        return ax, cbar
+
+    def plot_hex(self, pc: PlotConfig, ax: Optional[Axes] = None) -> Axes:
         text_mode = self._resolve_text_mode(None)
-        return self._render(ax, pc, polygon_func, text_mode)
+        ax, _ = self.plot(pc, shape='hex', ax=ax, text_mode=text_mode)
+        return ax
 
     def plot_circle(self, pc: PlotConfig, ax: Optional[Axes] = None, plot_type: Literal['value', 'text'] = 'value') -> Axes:
-        ax = self._setup_ax(pc, ax)
-
-        def circle_func(cell: HexCell, facecolor, edgecolor):
-            return Circle(
-                cell.real_cartesian.as_tuple(),
-                radius=cell.radius * np.sqrt(3) / 2,
-                facecolor=facecolor,
-                edgecolor=edgecolor
-            )
-
-        return self._render(ax, pc, circle_func, plot_type)
+        ax, _ = self.plot(pc, shape='circle', ax=ax, text_mode=plot_type)
+        return ax
 
         

@@ -53,11 +53,14 @@ class PlotConfig:
     figure_dpi      : float         = 400
     figure_size     : tuple[float, float] = (12, 12)
     figure_expand   : float         = 0.1
+    constrained_layout: bool        = True
     
     # axes
     axes_titlesize  : float         = 25
     axes_titleweight: str           = 'normal'
     axes_titley     : float         = 0.95
+    axes_titlepad   : float         = 10
+    title_wrap      : bool          = True
 
     # colormap
     colormap        : ColorMapSpec | None = None
@@ -91,6 +94,7 @@ class PlotConfig:
             'figure.figsize'                : self.figure_size,
             'axes.titlesize'                : self.axes_titlesize,
             'axes.titleweight'              : self.axes_titleweight,
-            'axes.titley'                   : self.axes_titley
+            'axes.titley'                   : self.axes_titley,
+            'axes.titlepad'                 : self.axes_titlepad,
         }
         mpl.rcParams.update(rc)

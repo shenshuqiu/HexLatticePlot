@@ -9,7 +9,7 @@ import sys
 package_path = os.path.dirname(os.getcwd())
 sys.path.append(package_path)
 
-from HexLattice import *
+from HexLatticePlot import *
 
 # MODE = "nodal_flux_162.26cm"
 MODE = "zone_flux"

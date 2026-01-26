@@ -22,6 +22,19 @@ purple_gradient_colors = ['#FDF2EE', '#FDF2EE', '#FABFBE', '#F598B3', '#F0659F',
 # Color list
 COLOR_LIST = purple_gradient_colors
 
+def _find_project_root(start: Path) -> Path:
+    for parent in (start, *start.parents):
+        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
+            return parent
+    return start
+
+def _resolve_root_dir(path: Path, resolve_project_root: bool) -> Path:
+    if path.is_absolute():
+        return path
+    if resolve_project_root:
+        return _find_project_root(Path.cwd()) / path
+    return Path.cwd() / path
+
 def text_color_based_on_bgcolor(bg_color: str) -> str:
     """return proper text color based on background color"""
     color = mcolors.to_rgb(bg_color)
@@ -35,9 +48,11 @@ class PlotConfig:
     image_name: str
     image_root_dir: Path            = Path('examples/plot')
     image_type: AllowedImageType    = 'png'
+    resolve_project_root: bool      = True
     @property
     def image_path(self) -> Path:
-        return self.image_root_dir / f'{self.image_name}.{self.image_type}'
+        root_dir = _resolve_root_dir(self.image_root_dir, self.resolve_project_root)
+        return root_dir / f'{self.image_name}.{self.image_type}'
     
     # text
     text_size       : float                 = 20

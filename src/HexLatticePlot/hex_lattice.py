@@ -229,6 +229,7 @@ class HexLattice:
                 cbar.set_label(colorbar_label)
 
         if save:
+            pc.image_path.parent.mkdir(parents=True, exist_ok=True)
             fig.savefig(pc.image_path)
         if show:
             plt.show()

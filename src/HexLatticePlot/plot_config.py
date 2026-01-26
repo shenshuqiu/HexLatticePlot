@@ -58,6 +58,14 @@ class PlotConfig:
     text_size       : float                 = 20
     text_color_func : Callable[[str], str]  = text_color_based_on_bgcolor
     text_color      : str                   = 'black'
+    font_family     : str                   = 'sans-serif'
+    font_sans_serif : Sequence[str] = field(default_factory=lambda: [
+        'PingFang SC',
+        'Heiti SC',
+        'SimHei',
+        'Arial Unicode MS',
+        'DejaVu Sans',
+    ])
     
     # hex
     plot_style      : str           = 'bmh'
@@ -65,22 +73,38 @@ class PlotConfig:
     hex_edge_color  : str           = 'black'
 
     # figure
-    figure_dpi      : float         = 400
+    figure_dpi      : float         = 600
     figure_size     : tuple[float, float] = (12, 12)
     figure_expand   : float         = 0.1
-    constrained_layout: bool        = True
+    constrained_layout: bool        = False
     
     # axes
     axes_titlesize  : float         = 25
-    axes_titleweight: str           = 'normal'
-    axes_titley     : float         = 0.95
+    axes_titleweight: str           = 'bold'
+    axes_titley     : float         = 1.02
     axes_titlepad   : float         = 10
     title_wrap      : bool          = True
+
+    # layout
+    layout_mode     : Literal['grid', 'legacy'] = 'grid'
+    layout_title_ratio: float      = 0.08
+    layout_cbar_ratio : float      = 0.08
+    layout_left       : float      = 0.06
+    layout_right      : float      = 0.94
+    layout_bottom     : float      = 0.06
+    layout_top        : float      = 0.94
+    layout_wspace     : float      = 0.03
+    layout_hspace     : float      = 0.02
+
+    # font scaling
+    auto_font       : bool          = True
+    cbar_tick_size  : float         = 12
+    cbar_label_size : float         = 14
 
     # colormap
     colormap        : ColorMapSpec | None = None
     color_list      : Sequence[str] = field(default_factory=lambda: COLOR_LIST)
-    use_tex         : bool          = True
+    use_tex         : bool          = False
     
     @property
     def color_map(self) -> mcolors.Colormap:
@@ -96,14 +120,27 @@ class PlotConfig:
                 raise ValueError(f"Unknown colormap name: {cmap}") from exc
         return LinearSegmentedColormap.from_list("my_cmap", list(cmap))
 
+    def _apply_auto_font(self) -> None:
+        if not self.auto_font:
+            return
+        scale = max(0.8, min(self.figure_size) / 8.0)
+        self.axes_titlesize = max(12, round(12 * scale))
+        self.text_size = max(9, round(7 * scale))
+        self.cbar_tick_size = max(9, round(7 * scale))
+        self.cbar_label_size = max(10, round(8 * scale))
+        self.axes_titlepad = max(8, round(6 * scale))
+
     def set_plot_config(self):
         # picture style
         plt.style.use(self.plot_style)
 
+        self._apply_auto_font()
+
         # rcParams
         rc = {
-            'font.family'                   : 'Times New Roman',
-            'mathtext.fontset'              : 'stix',
+            'font.family'                   : self.font_family,
+            'font.sans-serif'               : list(self.font_sans_serif),
+            'mathtext.fontset'              : 'dejavusans',
             'text.usetex'                   : self.use_tex,
             'figure.dpi'                    : self.figure_dpi,
             'figure.figsize'                : self.figure_size,

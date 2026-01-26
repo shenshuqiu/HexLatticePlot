@@ -117,7 +117,7 @@ class HexLattice:
         pc.set_plot_config()
         if ax is None:
             _, ax = plt.subplots(figsize=pc.figure_size, constrained_layout=pc.constrained_layout)
-        elif pc.constrained_layout:
+        elif pc.constrained_layout and pc.layout_mode == 'legacy':
             fig = ax.get_figure(root=True)
             if fig is not None:
                 setter = getattr(fig, "set_constrained_layout", None)
@@ -162,7 +162,8 @@ class HexLattice:
             ha='center',
             va='center',
             fontsize=pc.text_size,
-            color=text_color
+            color=text_color,
+            fontfamily=pc.font_family,
         )
 
     def _render(self, ax: Axes, pc: PlotConfig, shape_func: Callable, text_mode: Literal['value', 'text']) -> Axes:
@@ -171,7 +172,6 @@ class HexLattice:
             facecolor, label, text_color = self._build_style(i, cell, pc, text_mode)
             patch = shape_func(cell, facecolor, pc.hex_edge_color)
             self._draw_cell(ax, cell, patch, label, text_color, pc)
-        ax.set_title(pc.image_name, wrap=pc.title_wrap)
         return ax
 
     def _shape_polygon(self, cell: HexCell, facecolor, edgecolor):
@@ -206,6 +206,38 @@ class HexLattice:
         close: bool = False,
     ) -> tuple[Axes, Optional[Colorbar]]:
         # 对外统一绘图入口：创建画布 -> 渲染 -> 可选色标/保存/展示
+        title_ax: Optional[Axes] = None
+        cbar_ax: Optional[Axes] = None
+
+        if ax is None and pc.layout_mode == 'grid':
+            fig = plt.figure(figsize=pc.figure_size)
+            fig.subplots_adjust(
+                left=pc.layout_left,
+                right=pc.layout_right,
+                bottom=pc.layout_bottom,
+                top=pc.layout_top,
+                wspace=pc.layout_wspace,
+                hspace=pc.layout_hspace,
+            )
+            if colorbar:
+                gs = fig.add_gridspec(
+                    2,
+                    2,
+                    height_ratios=[pc.layout_title_ratio, 1.0],
+                    width_ratios=[1.0, pc.layout_cbar_ratio],
+                )
+                title_ax = fig.add_subplot(gs[0, 0])
+                ax = fig.add_subplot(gs[1, 0])
+                cbar_ax = fig.add_subplot(gs[1, 1])
+            else:
+                gs = fig.add_gridspec(
+                    2,
+                    1,
+                    height_ratios=[pc.layout_title_ratio, 1.0],
+                )
+                title_ax = fig.add_subplot(gs[0, 0])
+                ax = fig.add_subplot(gs[1, 0])
+
         ax = self._setup_ax(pc, ax)
         mode = self._resolve_text_mode(text_mode)
 
@@ -221,12 +253,40 @@ class HexLattice:
         fig = ax.get_figure(root=True)
         if fig is None:
             raise RuntimeError("Cannot resolve Figure from axes; ax.get_figure() returned None.")
+        if title_ax is not None:
+            title_ax.set_axis_off()
+            title_ax.text(
+                0.0,
+                1.0,
+                pc.image_name,
+                ha='left',
+                va='top',
+                fontsize=pc.axes_titlesize,
+                fontweight=pc.axes_titleweight,
+                wrap=pc.title_wrap,
+                fontfamily=pc.font_family,
+                transform=title_ax.transAxes,
+            )
+        else:
+            ax.set_title(
+                pc.image_name,
+                loc='left',
+                pad=pc.axes_titlepad,
+                wrap=pc.title_wrap,
+                fontfamily=pc.font_family,
+            )
         cbar: Optional[Colorbar] = None
         if colorbar:
             cb_kwargs = {} if colorbar_kwargs is None else colorbar_kwargs
-            cbar = fig.colorbar(self.mappable(pc), ax=ax, **cb_kwargs)
+            if cbar_ax is None:
+                cbar = fig.colorbar(self.mappable(pc), ax=ax, **cb_kwargs)
+            else:
+                cbar = fig.colorbar(self.mappable(pc), cax=cbar_ax, **cb_kwargs)
+            cbar.ax.tick_params(labelsize=pc.cbar_tick_size)
             if colorbar_label:
-                cbar.set_label(colorbar_label)
+                cbar.set_label(colorbar_label, fontsize=pc.cbar_label_size, fontfamily=pc.font_family)
+            for tick_label in cbar.ax.get_yticklabels():
+                tick_label.set_fontfamily(pc.font_family)
 
         if save:
             pc.image_path.parent.mkdir(parents=True, exist_ok=True)

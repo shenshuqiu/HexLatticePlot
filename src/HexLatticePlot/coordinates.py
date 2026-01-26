@@ -369,6 +369,18 @@ class RingCoordinate(AbstractCoordinate):
     @staticmethod
     def coord_is_valid(coord: Sequence[Union[int, float]]) -> bool:
         return all(x >= 0 for x in coord)
+
+    def __init__(self, *args: Union[int, Sequence[int]]) -> None:
+        # Input Sequence
+        if len(args) == 1 and isinstance(args[0], (tuple, list)) and len(args[0]) == 2:
+            r, k = cast(tuple[int, int], args[0])
+            self.r, self.k = r, k
+        # Input 2 ints
+        elif len(args) == 2 and all(isinstance(arg, int) for arg in args):
+            r, k = cast(tuple[int, int], args)
+            self.r, self.k = r, k
+        else:
+            raise TypeError(f'Invalid arguments {args}: Must be 2 int or a sequence of 2 int.')
     
     def convert_to_axial(self) -> AxialCoordinate:
         """
@@ -596,6 +608,14 @@ class CartesianCoordinate(AbstractCoordinate):
     
     def __rmul__(self, factor: Union[float, int]) -> 'CartesianCoordinate':
         return CartesianCoordinate(factor * self.x, factor * self.y)
+
+    @property
+    def z(self) -> float:
+        return self.y
+
+    @z.setter
+    def z(self, value: Union[float, int]) -> None:
+        self.y = float(value)
     
 
 # ---------------------------------------------------------------------------------------------------------------------

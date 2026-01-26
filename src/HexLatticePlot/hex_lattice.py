@@ -123,6 +123,8 @@ class HexLattice:
                 setter = getattr(fig, "set_constrained_layout", None)
                 if callable(setter):
                     setter(True)
+        if not self.HexCells:
+            raise ValueError("HexLattice has no cells to plot. Build a non-empty HexCell list before calling plot().")
         all_x = [[v[0] for v in cell.vertexes_pointy] for cell in self.HexCells]
         all_z = [[v[1] for v in cell.vertexes_pointy] for cell in self.HexCells]
         ax.set_xlim((np.min(all_x) - pc.figure_expand, np.max(all_x) + pc.figure_expand))

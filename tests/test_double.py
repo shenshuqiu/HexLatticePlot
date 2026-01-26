@@ -1,4 +1,4 @@
-from HexLattice.coordinates import AxialCoordinate, DoubleWidthCoordinate
+from HexLatticePlot.coordinates import AxialCoordinate, DoubleWidthCoordinate
 
 def test_double_to_axial():
     """

@@ -1,6 +1,6 @@
 import numpy as np
 
-from HexLattice.coordinates import AxialCoordinate, CartesianCoordinate
+from HexLatticePlot.coordinates import AxialCoordinate, CartesianCoordinate
 
 def test_cartesian_to_axial():
     """

@@ -1,0 +1,152 @@
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Literal, Callable, Sequence, Union
+
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import matplotlib.colors as mcolors
+from matplotlib.colors import LinearSegmentedColormap
+
+AllowedImageType = Literal['jpg', 'png', 'eps', 'svg']
+ColorMapSpec = Union[str, mcolors.Colormap, Sequence[str]]
+
+# blue - orange
+high_contrast_colors = ['#90C9E6', '#269EBC', '#136784', '#023048', '#FFB702', '#FDA003', '#FB8502']
+
+# red
+red_gradient_colors = ['#F9E3D6', '#F4B498', '#DA6F5B', '#B42C34', '#6C0E20']
+
+# purple
+purple_gradient_colors = ['#FDF2EE', '#FDF2EE', '#FABFBE', '#F598B3', '#F0659F', '#DB3694', '#AD207F', '#7B2577', '#50226A']
+
+# Color list
+COLOR_LIST = purple_gradient_colors
+
+def _find_project_root(start: Path) -> Path:
+    for parent in (start, *start.parents):
+        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
+            return parent
+    return start
+
+def _resolve_root_dir(path: Path, resolve_project_root: bool) -> Path:
+    if path.is_absolute():
+        return path
+    if resolve_project_root:
+        return _find_project_root(Path.cwd()) / path
+    return Path.cwd() / path
+
+def text_color_based_on_bgcolor(bg_color: str) -> str:
+    """return proper text color based on background color"""
+    color = mcolors.to_rgb(bg_color)
+    luminance = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]  
+    return 'white' if luminance < 0.5 else 'black'
+
+@dataclass
+class PlotConfig:
+    
+    # image path
+    image_name: str
+    image_root_dir: Path            = Path('examples/plot')
+    image_type: AllowedImageType    = 'png'
+    resolve_project_root: bool      = True
+    @property
+    def image_path(self) -> Path:
+        root_dir = _resolve_root_dir(self.image_root_dir, self.resolve_project_root)
+        return root_dir / f'{self.image_name}.{self.image_type}'
+    
+    # text
+    text_size       : float                 = 20
+    text_color_func : Callable[[str], str]  = text_color_based_on_bgcolor
+    text_color      : str                   = 'black'
+    font_family     : str                   = 'sans-serif'
+    font_sans_serif : Sequence[str] = field(default_factory=lambda: [
+        'PingFang SC',
+        'Heiti SC',
+        'SimHei',
+        'Arial Unicode MS',
+        'DejaVu Sans',
+    ])
+    
+    # hex
+    plot_style      : str           = 'bmh'
+    hex_face_color  : str           = high_contrast_colors[0]
+    hex_edge_color  : str           = 'black'
+
+    # figure
+    figure_dpi      : float         = 600
+    figure_size     : tuple[float, float] = (12, 12)
+    figure_expand   : float         = 0.1
+    constrained_layout: bool        = False
+    
+    # axes
+    axes_titlesize  : float         = 25
+    axes_titleweight: str           = 'bold'
+    axes_titley     : float         = 1.02
+    axes_titlepad   : float         = 10
+    title_wrap      : bool          = True
+
+    # layout
+    layout_mode     : Literal['grid', 'legacy'] = 'grid'
+    layout_title_ratio: float      = 0.08
+    layout_cbar_ratio : float      = 0.08
+    layout_left       : float      = 0.06
+    layout_right      : float      = 0.94
+    layout_bottom     : float      = 0.06
+    layout_top        : float      = 0.94
+    layout_wspace     : float      = 0.03
+    layout_hspace     : float      = 0.02
+
+    # font scaling
+    auto_font       : bool          = True
+    cbar_tick_size  : float         = 12
+    cbar_label_size : float         = 14
+
+    # colormap
+    colormap        : ColorMapSpec | None = None
+    color_list      : Sequence[str] = field(default_factory=lambda: COLOR_LIST)
+    use_tex         : bool          = False
+    
+    @property
+    def color_map(self) -> mcolors.Colormap:
+        cmap = self.colormap
+        if cmap is None:
+            return LinearSegmentedColormap.from_list("my_cmap", list(self.color_list))
+        if isinstance(cmap, mcolors.Colormap):
+            return cmap
+        if isinstance(cmap, str):
+            try:
+                return mpl.colormaps[cmap]
+            except KeyError as exc:
+                raise ValueError(f"Unknown colormap name: {cmap}") from exc
+        return LinearSegmentedColormap.from_list("my_cmap", list(cmap))
+
+    def _apply_auto_font(self) -> None:
+        if not self.auto_font:
+            return
+        scale = max(0.8, min(self.figure_size) / 8.0)
+        self.axes_titlesize = max(12, round(12 * scale))
+        self.text_size = max(9, round(7 * scale))
+        self.cbar_tick_size = max(9, round(7 * scale))
+        self.cbar_label_size = max(10, round(8 * scale))
+        self.axes_titlepad = max(8, round(6 * scale))
+
+    def set_plot_config(self):
+        # picture style
+        plt.style.use(self.plot_style)
+
+        self._apply_auto_font()
+
+        # rcParams
+        rc = {
+            'font.family'                   : self.font_family,
+            'font.sans-serif'               : list(self.font_sans_serif),
+            'mathtext.fontset'              : 'dejavusans',
+            'text.usetex'                   : self.use_tex,
+            'figure.dpi'                    : self.figure_dpi,
+            'figure.figsize'                : self.figure_size,
+            'axes.titlesize'                : self.axes_titlesize,
+            'axes.titleweight'              : self.axes_titleweight,
+            'axes.titley'                   : self.axes_titley,
+            'axes.titlepad'                 : self.axes_titlepad,
+        }
+        mpl.rcParams.update(rc)

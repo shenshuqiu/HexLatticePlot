@@ -1,4 +1,4 @@
-from HexLattice.coordinates import AxialCoordinate, CubeCoordinate
+from HexLatticePlot.coordinates import AxialCoordinate, CubeCoordinate
 
 def test_cube_to_axial():
     """

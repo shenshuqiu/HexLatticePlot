@@ -1,4 +1,4 @@
-from HexLattice.coordinates import AxialCoordinate, RingCoordinate
+from HexLatticePlot.coordinates import AxialCoordinate, RingCoordinate
 
 def test_ring_to_axial():
     """

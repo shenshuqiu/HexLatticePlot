@@ -623,28 +623,72 @@ class CartesianCoordinate(AbstractCoordinate):
 # ---------------------------------------------------------------------------------------------------------------------
 # Different coordinate representations which can be found at the following website: https://www.redblobgames.com/grids/hexagons/#coordinates-offset
 class CoordinateFactory:
-    
-    # create coordinate_dict
-    #  { 'ring' : RingCoordinate,
-    #    'axial': AxialCoordinate,
-    #    ...
-    #  }
     coordinate_dict: dict[str, type[AbstractCoordinate] | type[AxialCoordinate]] = dict()
-    for coord_class in AbstractCoordinate.__subclasses__():
-        coordinate_dict[getattr(coord_class, 'name')] = coord_class
-    coordinate_dict['axial'] = AxialCoordinate
+
+    @classmethod
+    def _iter_subclasses(cls, base_cls: type) -> list[type]:
+        res: list[type] = []
+        for sub in base_cls.__subclasses__():
+            res.append(sub)
+            res.extend(cls._iter_subclasses(sub))
+        return res
+
+    @classmethod
+    def refresh_registry(cls) -> None:
+        cls.coordinate_dict = dict()
+        coord_container = globals().get("Coordinate")
+        for coord_class in cls._iter_subclasses(AbstractCoordinate):
+            if coord_class.__name__ == "Coordinate":
+                continue
+            if coord_container is not None and issubclass(coord_class, coord_container):
+                continue
+            coord_name = getattr(coord_class, 'name', None)
+            if not isinstance(coord_name, str) or not coord_name:
+                coord_name = coord_class.__name__.lower()
+            cls.coordinate_dict[coord_name] = coord_class
+        cls.coordinate_dict['axial'] = AxialCoordinate
+        # Guard against stale state where Coordinate was registered earlier.
+        for k, v in list(cls.coordinate_dict.items()):
+            if v.__name__ == "Coordinate":
+                del cls.coordinate_dict[k]
+            elif coord_container is not None and issubclass(v, coord_container):
+                del cls.coordinate_dict[k]
+
+    @classmethod
+    def register(cls, coord_class: type, name: Optional[str] = None) -> str:
+        if not issubclass(coord_class, (AbstractCoordinate, AxialCoordinate)):
+            raise TypeError(f'Invalid coordinate class {coord_class}. Must inherit AbstractCoordinate or AxialCoordinate.')
+        if coord_class.__name__ == "Coordinate":
+            raise TypeError('Coordinate is a container type and cannot be registered.')
+        coord_name = name or getattr(coord_class, 'name', None) or coord_class.__name__.lower()
+        cls.coordinate_dict[coord_name] = coord_class
+        return coord_name
     
     @staticmethod
     def check_coord_type(coord: AbstractCoordinate | AxialCoordinate) -> None:
-        if not isinstance(coord, AxialCoordinate) and not any(isinstance(coord, c_class) for c_class in AbstractCoordinate.__subclasses__()):
-            raise ValueError(f'Invalid coordinary type \'{coord}\'.')
+        if isinstance(coord, AxialCoordinate):
+            return
+        coord_container = globals().get("Coordinate")
+        if coord_container is not None and isinstance(coord, coord_container):
+            return
+        if isinstance(coord, AbstractCoordinate):
+            if coord.__class__ not in CoordinateFactory.coordinate_dict.values():
+                CoordinateFactory.register(coord.__class__)
+            return
+        raise ValueError(f'Invalid coordinary type \'{coord}\'.')
 
     @staticmethod
-    def convert_all(coord: AbstractCoordinate | AxialCoordinate) -> dict[ValidCoordinateType, AbstractCoordinate | AxialCoordinate]:
+    def convert_all(coord: AbstractCoordinate | AxialCoordinate) -> dict[str, AbstractCoordinate | AxialCoordinate]:
+        CoordinateFactory.refresh_registry()
         CoordinateFactory.check_coord_type(coord)
         res_dict = dict()
         axial_coord = coord.convert_to_axial()
+        coord_container = globals().get("Coordinate")
         for c_type, c_class in CoordinateFactory.coordinate_dict.items():
+            if c_class.__name__ == "Coordinate":
+                continue
+            if coord_container is not None and issubclass(c_class, coord_container):
+                continue
             res_dict[c_type] = c_class.converted_from_axial(axial_coord)
         return res_dict
         
@@ -670,6 +714,16 @@ class Coordinate(AbstractCoordinate):
         coord_dict = CoordinateFactory.convert_all(coord_class)
         for coord_type, coord_object in coord_dict.items():
             setattr(self, coord_type, coord_object)
+
+    def __getattr__(self, name: str):
+        # Lazily add newly-registered coordinate types to existing instances.
+        CoordinateFactory.refresh_registry()
+        if name in CoordinateFactory.coordinate_dict:
+            coord_class = CoordinateFactory.coordinate_dict[name]
+            coord_object = coord_class.converted_from_axial(self.axial)
+            setattr(self, name, coord_object)
+            return coord_object
+        raise AttributeError(f"'Coordinate' object has no attribute '{name}'")
             
     def convert_to_axial(self) -> AxialCoordinate:
         return self.axial
